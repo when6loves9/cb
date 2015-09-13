@@ -8,6 +8,9 @@ use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use AppBundle\Entity\User;
 use AppBundle\Form\UserType;
 
+use AppBundle\Entity\Codes;
+use AppBundle\Entity\Campaign;
+
 /**
  * User controller.
  *
@@ -102,9 +105,12 @@ class UserController extends Controller
         }
 
         $deleteForm = $this->createDeleteForm($id);
+        
+        $redeemCodeForm= $this->createRedeemCodeForm($id);
 
         return $this->render('AppBundle:User:show.html.twig', array(
             'entity'      => $entity,
+            'redeemCodeForm'=>$redeemCodeForm->createView(),
             'delete_form' => $deleteForm->createView(),
         ));
     }
@@ -151,6 +157,70 @@ class UserController extends Controller
 
         return $form;
     }
+    
+   /* 
+   *Creates a redeem code Form 
+   *
+   * @param Codes $id The entity id
+
+   *@return \Symfony\Component\Form\Form The form
+    */
+      private function createRedeemCodeForm($id)
+    {
+  
+          
+      return $this->createFormBuilder()
+           ->setAction($this->generateUrl('user_redeemCheck', array('id' => $id)))
+            ->setMethod('GET')
+          ->add('coode','integer')
+          ->add('submit', 'submit', array('label' => 'Redeem Code'))
+                ->getForm();
+        $form->handleRequest($request);
+          
+                                         
+    }
+    
+     public function redeemCheckAction(Request $request,$id)
+     {
+       
+        $em = $this->getDoctrine()->getManager();
+$entity = $em->getRepository('AppBundle:Codes')->findOneByCode($request->query->get('form[coode]',null,true));
+       /*check if the code exists in the db*/
+         if (!$entity) {
+            throw $this->createNotFoundException('Unable to find Code entity.');
+         
+         }
+         /*check if the code has already been used*/
+
+         if($entity->getUsed()==1){
+         throw $this->createNotFoundException('The  Code has already been used!!');
+         }
+         /*check if the code's campaign expired*/
+         $campentity = $em->getRepository('AppBundle:Campaign')->findOneById( $entity->getCampaign_id());
+         
+         if (!$campentity) {
+            throw $this->createNotFoundException('Unable to find Campaign entity.');
+         
+     }
+/*check if the the redeem code date is valid*/
+         $time =new \DateTime();
+         if($campentity->getEnd_date() > $time){
+             throw $this->createNotFoundException('Campaign expired.');
+         }
+         else{
+             /*first of all update db so the code could not be used again*/
+         $entity->setUsed('1');
+             
+         $em->flush();
+    /* update private_projects_users table with the gift! 2 allowed free private projects for 1 year duration! we will use createNewPlanAction to give it to the user
+    */         
+            /* $privateproj= $em->getRepository('AppBundle:PrivateProjectsPlan');
+            $privateproj->setNumberAllowed('2');*/
+             
+         }
+        return $entity->getId();
+     }
+         
     /**
      * Edits an existing User entity.
      *
@@ -221,4 +291,6 @@ class UserController extends Controller
             ->getForm()
         ;
     }
+    
+    //private function redeemCode(
 }
